@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI FOR GIS LEARNER</title>
+    <style>
+        /* 基础和全局样式 */
+        html,
+        body {
+            height: 100%;
+            /* 让html和body元素占据整个视口高度 */
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(to bottom right, #f3e5f5, #e8eaf6);
+            /* 设置一个浅灰色背景 */
+        }
+
+        /* 主容器，使用Flexbox布局 */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            /* 垂直排列子元素 */
+            height: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            box-sizing: border-box;
+            /* 让内边距不增加总宽度/高度 */
+        }
+
+        /* ======== 从这里开始粘贴 ======== */
+
+        /* 聊天记录区域 */
+        .chat-history {
+            flex-grow: 1;
+            overflow-y: auto;
+            /* 允许聊天记录滚动 */
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            /* 消息之间的间距 */
+        }
+
+        /* 初始欢迎界面 */
+        .welcome-screen {
+            text-align: center;
+            margin: auto;
+            /* 垂直和水平居中 */
+            color: #555;
+            padding-bottom: 50px;
+            /* 距离输入框远一点 */
+        }
+
+        .welcome-screen.hidden {
+            display: none;
+            /* 用于隐藏欢迎界面的类 */
+        }
+
+        /* 聊天消息通用样式 */
+        .chat-message {
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 75%;
+            width: fit-content;
+            /* 宽度自适应内容 */
+            line-height: 1.5;
+            animation: pop-in 0.3s ease-out;
+            /* 添加一个简单的弹出动画 */
+        }
+
+        @keyframes pop-in {
+            from {
+                transform: scale(0.9);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .user-message {
+            background-color: #5e35b1;
+            color: white;
+            align-self: flex-end;
+            /* 用户消息靠右 */
+            border-radius: 15px;
+            /* 增加气泡感 */
+        }
+
+        .ai-message {
+            background-color: #ffffff;
+            color: #333;
+            align-self: flex-start;
+            /* AI消息靠左 */
+            border: 1px solid #e0e0e0;
+            border-radius: 15px;
+            /* 增加气泡感 */
+        }
+
+        /* API错误消息的专属样式 */
+        .error-message {
+            background-color: #ffebee;
+            color: #c62828;
+            align-self: flex-start;
+            border: 1px solid #ef9a9a;
+        }
+
+        /* AI思考中的占位符动画 */
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #999;
+            margin: 0 2px;
+            animation: bounce 1.2s infinite;
+        }
+
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            60%,
+            100% {
+                transform: translateY(0);
+            }
+
+            30% {
+                transform: translateY(-6px);
+            }
+        }
+
+        /* ======== 粘贴到这里结束 ======== */
+
+        /* 输入区域容器 */
+        .input-area-container {
+            padding: 10px 0;
+            /* 在输入框上下添加一些空间 */
+        }
+
+        /* 输入框的外部包裹层，用于设计样式 */
+        .input-wrapper {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 20px;
+            /* 圆角设计 */
+            padding: 10px 15px;
+            display: flex;
+            flex-direction: column;
+            /* 内部元素垂直排列 */
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            /* 添加细微阴影 */
+        }
+
+        /* 文本输入框 */
+        textarea.main-input {
+            border: none;
+            outline: none;
+            /* 去掉点击时的蓝色边框 */
+            resize: none;
+            /* 禁止用户调整大小 */
+            font-size: 16px;
+            width: 100%;
+            height: 50px;
+            /* 初始高度 */
+            background-color: transparent;
+            font-family: inherit;
+        }
+
+        /* 底部工具栏 */
+        .toolbar {
+            display: flex;
+            /* 使用Flexbox布局 */
+            justify-content: space-between;
+            /* 两端对齐 */
+            align-items: center;
+            /* 垂直居中 */
+            margin-top: 10px;
+        }
+
+        /* 左侧工具栏，包含模型选择和附件 */
+        .left-tools {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* 模型选择器样式 */
+        .model-selector {
+            display: flex;
+            align-items: center;
+            background-color: #ede7f6;
+            /* 浅紫色背景 */
+            padding: 5px 10px;
+            border-radius: 15px;
+            /* 圆角 */
+            cursor: pointer;
+            /* 鼠标悬浮时显示为手型 */
+            font-size: 14px;
+            color: #5e35b1;
+            /* 深一点的紫色文字 */
+        }
+
+        .model-selector svg {
+            margin-right: 5px;
+            width: 16px;
+            height: 16px;
+            fill: #5e35b1;
+        }
+
+        /* 发送按钮 */
+        .send-button {
+            background-color: #5e35b1;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: none;
+            cursor: pointer;
+        }
+
+        .send-button svg {
+            fill: white;
+            width: 18px;
+            height: 18px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #5e35b1;
+            font-size: 34px;
+            margin-bottom: 20px;
+            font-weight: 400;
+        }
+
+        .card1 {
+            width: 72px;
+            height: 85px;
+            background: rgba(214, 101, 243, 0.09);
+            box-shadow: 0px 4px 6.300000190734863px rgba(0, 0, 0, 0.05);
+            border-radius: 16px;
+            border: 1px var(--Colors-Purple, #AF52DE) solid;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .card1 p {
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .cards-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .settings {
+            padding: 0%;
+            background: none;
+            border: none;
+            width: 24px;
+            height: 24px;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+
+        .modal-overlay {
+            display: none;
+            /* 默认隐藏 */
+            position: fixed;
+            /* 固定定位，覆盖整个页面 */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            /* 半透明黑色背景 */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            /* 确保在最上层 */
+        }
+
+        /* 对话框内容区 */
+        .modal-content {
+            background: white;
+            padding: 25px 30px;
+            border-radius: 12px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 400px;
+            position: relative;
+            animation: slide-down 0.3s ease-out;
+        }
+
+        @keyframes slide-down {
+            from {
+                transform: translateY(-30px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-content h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        /* 右上角的关闭按钮 '×' */
+        .close-modal {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 28px;
+            color: #aaa;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close-modal:hover {
+            color: #333;
+        }
+
+        /* 表单样式 */
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            /* 重要！防止 padding 撑大宽度 */
+        }
+
+        /* 表单按钮区域 */
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            /* 按钮靠右对齐 */
+            gap: 10px;
+            /* 按钮之间的间距 */
+            margin-top: 25px;
+        }
+
+        .form-actions button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .save-btn {
+            background-color: #5e35b1;
+            color: white;
+        }
+
+        .test-btn {
+            background-color: #5e35b1;
+            color: white;
+        }
+
+        .cancel-btn {
+            background-color: #f0f0f0;
+            color: #333;
+        }
+
+        /* 模型选择下拉菜单 */
+        .model-dropdown {
+            display: none;
+            /* 默认隐藏 */
+            position: absolute;
+            /* 绝对定位 */
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1001;
+            /* 比遮罩层更高 */
+            overflow: hidden;
+            /* 让内部圆角生效 */
+            animation: fade-in 0.2s ease-out;
+            overflow-y: auto;
+            max-height: 250px;
+        }
+
+        @keyframes fade-in {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .model-dropdown a {
+            display: block;
+            padding: 10px 20px;
+            color: #333;
+            text-decoration: none;
+            white-space: nowrap;
+
+            /* 防止文字换行 */
+        }
+
+        .model-dropdown a:hover {
+            background-color: #f5f5f5;
+        }
+
+        .top-button {
+            background: none;
+            border: none;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            cursor: pointer;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+            z-index: 100;
+            /* 确保按钮在顶层 */
+        }
+
+        .top-button:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        /* 重新定义历史记录和设置按钮的位置 */
+        .chat-history-list {
+            left: 20px;
+        }
+
+        /* 历史记录侧边栏样式 */
+        .history-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 280px;
+            height: 100%;
+            background-color: white;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            transform: translateX(-100%);
+            /* 默认隐藏在屏幕左侧 */
+            transition: transform 0.3s ease-in-out;
+            /* 定义滑动的动画效果 */
+            z-index: 1100;
+            /* 确保层级高于其他内容 */
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 当侧边栏拥有 .open 类时，将它滑入视图 */
+        .history-sidebar.open {
+            transform: translateX(0);
+        }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .sidebar-header h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+
+        .close-sidebar {
+            font-size: 28px;
+            color: #999;
+            cursor: pointer;
+            line-height: 1;
+        }
+
+        .close-sidebar:hover {
+            color: #333;
+        }
+
+        .history-items-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow-y: auto;
+            /* 如果列表太长，允许滚动 */
+        }
+
+        .history-items-list li a {
+            display: block;
+            padding: 12px 15px;
+            text-decoration: none;
+            color: #333;
+            border-radius: 8px;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            /* 如果文字太长，显示省略号 */
+        }
+
+        .history-items-list li a:hover {
+            background-color: #f5f5f5;
+        }
+
+        /* 新对话按钮的样式 */
+        .new-chat-button {
+            background-color: #5e35b1;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-left: auto;
+            /* 把它推到标题和关闭按钮之间 */
+            margin-right: 15px;
+        }
+
+        .new-chat-button:hover {
+            opacity: 0.9;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+
+<body>
+
+    <button class="top-button chat-history-list">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g id="chat-history-list">
+                <path id="Path 2" d="M6 7H15" stroke="#161617" stroke-linecap="round" />
+                <path id="Path 2_2" d="M6 12H18" stroke="#161617" stroke-linecap="round" />
+                <path id="Path 2_3" d="M6 17H12" stroke="#161617" stroke-linecap="round" />
+            </g>
+        </svg>
+    </button>
+    <div id="history-sidebar" class="history-sidebar">
+        <div class="sidebar-header">
+            <h2>历史记录</h2>
+            <button id="new-chat-btn" class="new-chat-button">新对话</button>
+            <span class="close-sidebar">&times;</span>
+        </div>
+        <ul class="history-items-list">
+        </ul>
+    </div>
+
+
+    <button class="settings"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+            xmlns="http://www.w3.org/2000/svg">
+            <g id="settings">
+                <path id="Combined Shape"
+                    d="M12.5591 3L12.5592 2.5H12.5591V3ZM14.4556 4.36719L13.9813 4.52541L13.9813 4.52552L14.4556 4.36719ZM14.8726 5.61621L14.3983 5.77455L14.4676 5.98214L14.6671 6.07206L14.8726 5.61621ZM16.0903 6.32129L15.7978 6.72676L15.9757 6.85515L16.1907 6.81112L16.0903 6.32129ZM17.3823 6.05664L17.2822 5.56678L17.282 5.56681L17.3823 6.05664ZM19.5152 7.0166L19.0821 7.2666L19.0822 7.26674L19.5152 7.0166ZM20.0737 7.9834L20.5068 7.7334L20.5067 7.73326L20.0737 7.9834ZM19.8384 10.3105L20.2121 10.6427L20.2125 10.6422L19.8384 10.3105ZM18.9644 11.2939L18.5906 10.9618L18.445 11.1256L18.4669 11.3438L18.9644 11.2939ZM18.9644 12.7051L18.4669 12.6553L18.4451 12.8733L18.5905 13.0371L18.9644 12.7051ZM19.8384 13.6895L20.2125 13.3578L20.2123 13.3575L19.8384 13.6895ZM20.0737 16.0166L20.5067 16.2667L20.5068 16.2666L20.0737 16.0166ZM19.5152 16.9834L19.0822 16.7333L19.0821 16.7334L19.5152 16.9834ZM17.3823 17.9434L17.2816 18.4331L17.2822 18.4332L17.3823 17.9434ZM16.0903 17.6777L16.191 17.188L15.9759 17.1437L15.7978 17.2723L16.0903 17.6777ZM14.8726 18.3828L14.6671 17.927L14.4675 18.0169L14.3983 18.2246L14.8726 18.3828ZM14.4556 19.6328L13.9813 19.4746L13.9813 19.4746L14.4556 19.6328ZM12.5591 21L12.5591 21.5L12.5592 21.5L12.5591 21ZM9.54445 19.6328L10.0188 19.4746L10.0188 19.4746L9.54445 19.6328ZM9.12746 18.3828L9.60176 18.2246L9.53249 18.0169L9.33293 17.927L9.12746 18.3828ZM7.90871 17.6777L8.20136 17.2723L8.02318 17.1437L7.80794 17.188L7.90871 17.6777ZM6.61769 17.9434L6.7178 18.4332L6.71845 18.4331L6.61769 17.9434ZM4.48488 16.9834L4.91789 16.7334L4.91781 16.7333L4.48488 16.9834ZM3.92628 16.0166L3.49327 16.2666L3.49335 16.2667L3.92628 16.0166ZM4.16261 13.6895L4.53671 14.0212L4.53685 14.021L4.16261 13.6895ZM5.03566 12.7041L5.4099 13.0357L5.55492 12.872L5.53318 12.6544L5.03566 12.7041ZM5.03566 11.2949L5.53318 11.3447L5.55496 11.1269L5.40973 10.9632L5.03566 11.2949ZM4.16261 10.3105L3.78851 10.6423L3.78854 10.6423L4.16261 10.3105ZM3.92628 7.9834L3.49335 7.73326L3.49327 7.7334L3.92628 7.9834ZM4.48488 7.0166L4.91781 7.26674L4.91789 7.2666L4.48488 7.0166ZM6.61769 6.05664L6.7181 5.56683L6.7178 5.56677L6.61769 6.05664ZM7.90871 6.32129L7.8083 6.8111L8.02334 6.85518L8.20133 6.72672L7.90871 6.32129ZM9.12746 5.61621L9.3329 6.07205L9.53242 5.98213L9.60172 5.77455L9.12746 5.61621ZM9.54445 4.36719L10.0187 4.52552L10.0188 4.52539L9.54445 4.36719ZM12.5591 3L12.559 3.5C13.2043 3.50015 13.777 3.91309 13.9813 4.52541L14.4556 4.36719L14.9299 4.20896C14.5895 3.18871 13.635 2.50025 12.5592 2.5L12.5591 3ZM14.4556 4.36719L13.9813 4.52552L14.3983 5.77455L14.8726 5.61621L15.3468 5.45787L14.9298 4.20885L14.4556 4.36719ZM14.8726 5.61621L14.6671 6.07206C15.0669 6.2522 15.445 6.47223 15.7978 6.72676L16.0903 6.32129L16.3829 5.91582C15.9769 5.62287 15.5405 5.36879 15.078 5.16036L14.8726 5.61621ZM16.0903 6.32129L16.1907 6.81112L17.4827 6.54647L17.3823 6.05664L17.282 5.56681L15.99 5.83146L16.0903 6.32129ZM17.3823 6.05664L17.4825 6.5465C18.1148 6.41721 18.7592 6.70732 19.0821 7.2666L19.5152 7.0166L19.9482 6.7666C19.4103 5.83498 18.3365 5.35117 17.2822 5.56678L17.3823 6.05664ZM19.5152 7.0166L19.0822 7.26674L19.6408 8.23354L20.0737 7.9834L20.5067 7.73326L19.9481 6.76646L19.5152 7.0166ZM20.0737 7.9834L19.6407 8.2334C19.9635 8.79253 19.8924 9.49585 19.4642 9.97887L19.8384 10.3105L20.2125 10.6422C20.9263 9.83706 21.0447 8.66514 20.5068 7.7334L20.0737 7.9834ZM19.8384 10.3105L19.4647 9.97839L18.5906 10.9618L18.9644 11.2939L19.3381 11.6261L20.2121 10.6427L19.8384 10.3105ZM18.9644 11.2939L18.4669 11.3438C18.4886 11.5608 18.5005 11.7797 18.5005 12H19.0005H19.5005C19.5005 11.7437 19.4867 11.4915 19.4619 11.2441L18.9644 11.2939ZM19.0005 12H18.5005C18.5005 12.2199 18.4886 12.4384 18.4669 12.6553L18.9644 12.7051L19.4619 12.7548C19.4866 12.508 19.5005 12.2561 19.5005 12H19.0005ZM18.9644 12.7051L18.5905 13.0371L19.4645 14.0214L19.8384 13.6895L20.2123 13.3575L19.3383 12.3731L18.9644 12.7051ZM19.8384 13.6895L19.4642 14.0211C19.8924 14.5041 19.9635 15.2075 19.6407 15.7666L20.0737 16.0166L20.5068 16.2666C21.0447 15.3349 20.9263 14.1629 20.2125 13.3578L19.8384 13.6895ZM20.0737 16.0166L19.6408 15.7665L19.0822 16.7333L19.5152 16.9834L19.9481 17.2335L20.5067 16.2667L20.0737 16.0166ZM19.5152 16.9834L19.0821 16.7334C18.7592 17.2927 18.1148 17.5828 17.4825 17.4535L17.3823 17.9434L17.2822 18.4332C18.3365 18.6488 19.4103 18.165 19.9482 17.2334L19.5152 16.9834ZM17.3823 17.9434L17.483 17.4536L16.191 17.188L16.0903 17.6777L15.9897 18.1675L17.2816 18.4331L17.3823 17.9434ZM16.0903 17.6777L15.7978 17.2723C15.445 17.5268 15.067 17.7468 14.6671 17.927L14.8726 18.3828L15.078 18.8386C15.5405 18.6302 15.9768 18.3762 16.3829 18.0832L16.0903 17.6777ZM14.8726 18.3828L14.3983 18.2246L13.9813 19.4746L14.4556 19.6328L14.9299 19.791L15.3469 18.541L14.8726 18.3828ZM14.4556 19.6328L13.9813 19.4746C13.777 20.0869 13.2043 20.4999 12.559 20.5L12.5591 21L12.5592 21.5C13.635 21.4998 14.5895 20.8113 14.9299 19.791L14.4556 19.6328ZM12.5591 21V20.5H11.4419V21V21.5H12.5591V21ZM11.4419 21V20.5C10.7963 20.5 10.223 20.0869 10.0188 19.4746L9.54445 19.6328L9.07014 19.791C9.41057 20.8117 10.3661 21.5 11.4419 21.5V21ZM9.54445 19.6328L10.0188 19.4746L9.60176 18.2246L9.12746 18.3828L8.65315 18.541L9.07014 19.791L9.54445 19.6328ZM9.12746 18.3828L9.33293 17.927C8.93248 17.7465 8.55388 17.5268 8.20136 17.2723L7.90871 17.6777L7.61605 18.0831C8.02269 18.3767 8.45965 18.6302 8.92198 18.8386L9.12746 18.3828ZM7.90871 17.6777L7.80794 17.188L6.51693 17.4536L6.61769 17.9434L6.71845 18.4331L8.00947 18.1675L7.90871 17.6777ZM6.61769 17.9434L6.51758 17.4535C5.88531 17.5827 5.24072 17.2926 4.91789 16.7334L4.48488 16.9834L4.05187 17.2334C4.58972 18.165 5.66364 18.6487 6.7178 18.4332L6.61769 17.9434ZM4.48488 16.9834L4.91781 16.7333L4.35922 15.7665L3.92628 16.0166L3.49335 16.2667L4.05195 17.2335L4.48488 16.9834ZM3.92628 16.0166L4.3593 15.7666C4.03664 15.2077 4.10813 14.5045 4.53671 14.0212L4.16261 13.6895L3.78851 13.3577C3.07479 14.1626 2.95507 15.3344 3.49327 16.2666L3.92628 16.0166ZM4.16261 13.6895L4.53685 14.021L5.4099 13.0357L5.03566 12.7041L4.66142 12.3725L3.78838 13.3579L4.16261 13.6895ZM5.03566 12.7041L5.53318 12.6544C5.51167 12.4391 5.5005 12.2208 5.5005 12H5.0005H4.5005C4.5005 12.2546 4.51338 12.506 4.53814 12.7538L5.03566 12.7041ZM5.0005 12H5.5005C5.5005 11.7788 5.51162 11.5602 5.53318 11.3447L5.03566 11.2949L4.53814 11.2452C4.51331 11.4934 4.5005 11.7452 4.5005 12H5.0005ZM5.03566 11.2949L5.40973 10.9632L4.53669 9.97878L4.16261 10.3105L3.78854 10.6423L4.66159 11.6267L5.03566 11.2949ZM4.16261 10.3105L4.53671 9.97881C4.10813 9.49549 4.03664 8.79226 4.3593 8.2334L3.92628 7.9834L3.49327 7.7334C2.95507 8.66559 3.07479 9.83741 3.78851 10.6423L4.16261 10.3105ZM3.92628 7.9834L4.35922 8.23354L4.91781 7.26674L4.48488 7.0166L4.05195 6.76646L3.49335 7.73326L3.92628 7.9834ZM4.48488 7.0166L4.91789 7.2666C5.24072 6.70745 5.88531 6.41731 6.51758 6.54652L6.61769 6.05664L6.7178 5.56677C5.66364 5.35134 4.58972 5.83501 4.05187 6.7666L4.48488 7.0166ZM6.61769 6.05664L6.51728 6.54646L7.8083 6.8111L7.90871 6.32129L8.00911 5.83147L6.7181 5.56683L6.61769 6.05664ZM7.90871 6.32129L8.20133 6.72672C8.55388 6.47226 8.93256 6.25249 9.3329 6.07205L9.12746 5.61621L8.92201 5.16037C8.45966 5.36875 8.02264 5.62243 7.61609 5.91586L7.90871 6.32129ZM9.12746 5.61621L9.60172 5.77455L10.0187 4.52552L9.54445 4.36719L9.07018 4.20885L8.65319 5.45787L9.12746 5.61621ZM9.54445 4.36719L10.0188 4.52539C10.223 3.91309 10.7963 3.5 11.4419 3.5V3V2.5C10.3661 2.5 9.41057 3.18832 9.07014 4.20898L9.54445 4.36719ZM11.4419 3V3.5H12.5591V3V2.5H11.4419V3Z"
+                    fill="#141314" />
+                <path id="Oval" fill-rule="evenodd" clip-rule="evenodd"
+                    d="M12 13C12.5523 13 13 12.5523 13 12C13 11.4477 12.5523 11 12 11C11.4477 11 11 11.4477 11 12C11 12.5523 11.4477 13 12 13Z"
+                    stroke="#141314" />
+            </g>
+        </svg>
+    </button>
+
+    <div class="chat-container">
+
+        <h1>AI助手 FOR GIS LEARNER</h1>
+        <div id="welcome-screen" class="welcome-screen">
+            <p>AI助手 FOR GIS LEARNER是一个基于AI技术的GIS学习助手，它可以帮助GIS学习者快速掌握GIS知识，提高GIS学习效率。</p>
+            <p>AI助手 FOR GIS LEARNER的功能包括：</p>
+
+            <div class="cards-container">
+                <div class="card1"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" clip-rule="evenodd"
+                            d="M12 2.5C6.75329 2.5 2.5 6.75329 2.5 12C2.5 17.2467 6.75329 21.5 12 21.5C17.2467 21.5 21.5 17.2467 21.5 12C21.5 6.75329 17.2467 2.5 12 2.5ZM1.5 12C1.5 6.20101 6.20101 1.5 12 1.5C17.799 1.5 22.5 6.20101 22.5 12C22.5 17.799 17.799 22.5 12 22.5C6.20101 22.5 1.5 17.799 1.5 12Z"
+                            fill="black" />
+                        <path fill-rule="evenodd" clip-rule="evenodd"
+                            d="M9.63581 5.11463C8.94095 6.85177 8.5 9.2859 8.5 12C8.5 14.7141 8.94095 17.1482 9.63581 18.8854C9.9838 19.7553 10.3856 20.4258 10.8063 20.8706C11.2259 21.3143 11.6295 21.5 12 21.5C12.3705 21.5 12.7741 21.3143 13.1937 20.8706C13.6144 20.4258 14.0162 19.7553 14.3642 18.8854C15.059 17.1482 15.5 14.7141 15.5 12C15.5 9.2859 15.059 6.85177 14.3642 5.11463C14.0162 4.24467 13.6144 3.5742 13.1937 3.1294C12.7741 2.68566 12.3705 2.5 12 2.5C11.6295 2.5 11.2259 2.68566 10.8063 3.1294C10.3856 3.5742 9.9838 4.24467 9.63581 5.11463ZM10.0797 2.4423C10.6172 1.87398 11.2659 1.5 12 1.5C12.7341 1.5 13.3828 1.87398 13.9203 2.4423C14.4567 3.00955 14.9168 3.80355 15.2927 4.74324C16.0455 6.62538 16.5 9.19125 16.5 12C16.5 14.8087 16.0455 17.3746 15.2927 19.2568C14.9168 20.1964 14.4567 20.9904 13.9203 21.5577C13.3828 22.126 12.7341 22.5 12 22.5C11.2659 22.5 10.6172 22.126 10.0797 21.5577C9.54328 20.9904 9.08321 20.1964 8.70733 19.2568C7.95448 17.3746 7.5 14.8087 7.5 12C7.5 9.19125 7.95448 6.62538 8.70733 4.74324C9.08321 3.80355 9.54328 3.00955 10.0797 2.4423Z"
+                            fill="black" />
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M2 11.5H22V12.5H2V11.5Z" fill="black" />
+                    </svg>
+                    <p>学习建议</p>
+                </div>
+
+                <div class="card1"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" clip-rule="evenodd"
+                            d="M10 3.5C6.41015 3.5 3.5 6.41015 3.5 10C3.5 13.5899 6.41015 16.5 10 16.5C13.5899 16.5 16.5 13.5899 16.5 10C16.5 6.41015 13.5899 3.5 10 3.5ZM2.5 10C2.5 5.85786 5.85786 2.5 10 2.5C14.1421 2.5 17.5 5.85786 17.5 10C17.5 14.1421 14.1421 17.5 10 17.5C5.85786 17.5 2.5 14.1421 2.5 10Z"
+                            fill="black" />
+                        <path fill-rule="evenodd" clip-rule="evenodd"
+                            d="M14 10C14 7.79086 12.2091 6 10 6V5C12.7614 5 15 7.23858 15 10H14Z" fill="black" />
+                        <path fill-rule="evenodd" clip-rule="evenodd"
+                            d="M15.3536 14.6465L21.3536 20.6465L20.6465 21.3536L14.6465 15.3536L15.3536 14.6465Z"
+                            fill="black" />
+                    </svg>
+                    <p>回答问题</p>
+                </div>
+
+                <div class="card1"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path fill-rule="evenodd" clip-rule="evenodd"
+                            d="M5 2C5 1.72386 5.22386 1.5 5.5 1.5H15.5C15.6449 1.5 15.7828 1.5629 15.8777 1.6724C15.9727 1.7819 16.0155 1.92722 15.995 2.07071L15.0765 8.5H18.5C18.686 8.5 18.8566 8.60322 18.9429 8.76795C19.0292 8.93268 19.017 9.1317 18.9111 9.28461L9.9111 22.2846C9.7866 22.4644 9.55968 22.5425 9.35092 22.4773C9.14215 22.412 9 22.2187 9 22V13.5H5.5C5.22386 13.5 5 13.2761 5 13V2ZM6 2.5V12.5H9.5C9.77614 12.5 10 12.7239 10 13V20.3994L17.5457 9.5H14.5C14.3551 9.5 14.2172 9.4371 14.1223 9.3276C14.0273 9.2181 13.9845 9.07278 14.005 8.92929L14.9235 2.5H6Z"
+                            fill="black" />
+                    </svg>
+                    <p>提供思路</p>
+                </div>
+            </div>
+
+
+        </div>
+
+
+
+        <div class="chat-history"></div>
+
+        <div class="input-area-container">
+            <div class="input-wrapper">
+                <textarea class="main-input" placeholder="请输入您的问题..."></textarea>
+
+                <div class="toolbar">
+                    <div class="left-tools">
+                        <div class="model-selector">
+                            <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M1 4.95C1 5.94456 1.39509 6.89839 2.09835 7.60165C2.80161 8.30491 3.75544 8.7 4.75 8.7C5.74456 8.7 6.69839 8.30491 7.40165 7.60165C8.10491 6.89839 8.5 5.94456 8.5 4.95C8.5 3.95544 8.10491 3.00161 7.40165 2.29835C6.69839 1.59509 5.74456 1.2 4.75 1.2C3.75544 1.2 2.80161 1.59509 2.09835 2.29835C1.39509 3.00161 1 3.95544 1 4.95Z"
+                                    stroke="#5e35b1" stroke-width="0.5" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                                <path
+                                    d="M4.186 2.5H5.84533C5.88793 2.5 5.92983 2.51089 5.96704 2.53163C6.00425 2.55237 6.03554 2.58227 6.05795 2.61851C6.08036 2.65474 6.09313 2.69609 6.09507 2.73865C6.097 2.78121 6.08803 2.82355 6.069 2.86167L5.5 4H6.5L4 7.5L4.25 5H3.586C3.54702 4.99999 3.50858 4.99086 3.47376 4.97335C3.43893 4.95583 3.40868 4.93042 3.38543 4.89913C3.36217 4.86785 3.34656 4.83156 3.33983 4.79316C3.3331 4.75477 3.33544 4.71533 3.34667 4.678L3.94667 2.678C3.96209 2.62653 3.99371 2.5814 4.03683 2.54933C4.07995 2.51726 4.13226 2.49996 4.186 2.5Z"
+                                    stroke="#FFFFFF" stroke-width="0.5" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+
+                            <span>DeepSeek</span>
+                        </div>
+
+                    </div>
+
+                    <button class="send-button">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-modal">&times;</span>
+            <h2>API 设置</h2>
+            <form id="api-form">
+                <div class="form-group">
+                    <label for="api-url">API URL</label>
+                    <input type="text" id="api-url" placeholder="请输入您的 API 地址">
+                </div>
+                <div class="form-group">
+                    <label for="api-key">API Key</label>
+                    <input type="password" id="api-key" placeholder="请输入您的 API Key">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="cancel-btn">取消</button>
+                    <button type="button" id="test-connection-btn" class="test-btn">测试连接</button>
+                    <button type="submit" class="save-btn">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="model-dropdown" class="model-dropdown">
+    </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- Element Selections (no changes here) ---
+            const settingsBtn = document.querySelector('.settings');
+            const settingsModal = document.getElementById('settings-modal');
+            const closeModalBtn = document.querySelector('.close-modal');
+            const cancelBtn = document.querySelector('.cancel-btn');
+            const apiForm = document.getElementById('api-form');
+            const apiUrlInput = document.getElementById('api-url');
+            const apiKeyInput = document.getElementById('api-key');
+            const testConnectionBtn = document.getElementById('test-connection-btn');
+            const modelSelector = document.querySelector('.model-selector');
+            const modelDropdown = document.getElementById('model-dropdown');
+            const selectedModelSpan = modelSelector.querySelector('span');
+            const historyListBtn = document.querySelector('.chat-history-list');
+            const historySidebar = document.getElementById('history-sidebar');
+            const historyItemsList = document.querySelector('.history-items-list');
+            const closeSidebarBtn = document.querySelector('.close-sidebar');
+            const mainInput = document.querySelector('.main-input');
+            const sendButton = document.querySelector('.send-button');
+            const chatHistoryContainer = document.querySelector('.chat-history');
+            const welcomeScreen = document.getElementById('welcome-screen');
+            const newChatBtn = document.getElementById('new-chat-btn');
+
+
+            // 提示词
+            const CORE_SYSTEM_PROMPT = `
+You are a professional AI assistant named "GIS-Learner-Helper". 
+Your primary function is to assist users with questions related to Geographic Information Science (GIS).
+Always provide answers that are accurate, clear, and structured.
+When providing code examples, specify the programming language.
+Your responses must be in Markdown format.
+Do not mention that you are an AI model.
+    `.trim();
+            let conversationHistory = [];
+            let currentConversationId = null;
+
+            // --- 核心聊天功能 ---
+            // 函数：清空聊天窗口
+            const clearChatWindow = () => {
+                chatHistoryContainer.innerHTML = ''; // 清空聊天记录
+                welcomeScreen.classList.remove('hidden'); // 重新显示欢迎界面
+            };
+
+            // --- 新增：历史记录管理功能 ---
+
+            // 函数：加载所有历史记录到侧边栏
+            const loadHistoryToSidebar = () => {
+                historyItemsList.innerHTML = ''; // 清空现有列表
+                const allConversations = JSON.parse(localStorage.getItem('allConversations') || '[]');
+                allConversations.forEach(convo => {
+                    const listItem = document.createElement('li');
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = convo.title; // 使用保存的标题
+                    link.dataset.conversationId = convo.id; // 在元素上存储ID
+                    listItem.appendChild(link);
+                    historyItemsList.appendChild(listItem);
+                });
+            };
+
+            // 函数：加载指定的对话到主聊天窗口
+            const loadConversation = (id) => {
+                const allConversations = JSON.parse(localStorage.getItem('allConversations') || '[]');
+                const conversation = allConversations.find(c => c.id === id);
+                if (conversation) {
+                    clearChatWindow();
+                    welcomeScreen.classList.add('hidden'); // 隐藏欢迎界面
+                    conversation.messages.forEach(msg => {
+                        addMessageToChat(msg.role, msg.content);
+                    });
+                    conversationHistory = conversation.messages;
+                    currentConversationId = id;
+                    historySidebar.classList.remove('open'); // 关闭侧边栏
+                }
+            };
+
+            // 函数：保存当前对话
+            const saveConversation = () => {
+                if (conversationHistory.length === 0) return;
+
+                const allConversations = JSON.parse(localStorage.getItem('allConversations') || '[]');
+                const title = conversationHistory[0].content.substring(0, 30); // 用第一句话做标题
+
+                if (currentConversationId) {
+                    // 如果已有ID，说明是旧对话，我们只更新它
+                    const convoIndex = allConversations.findIndex(c => c.id === currentConversationId);
+                    if (convoIndex !== -1) {
+                        allConversations[convoIndex].messages = conversationHistory;
+                        // （可选）如果标题为空，也可以在这里更新
+                        if (!allConversations[convoIndex].title) {
+                            allConversations[convoIndex].title = title;
+                        }
+                    } else {
+                        // 如果ID存在但在库里找不到，说明数据可能出错了，当作新对话处理
+                        currentConversationId = null;
+                    }
+                }
+
+                // **只有当 currentConversationId 为 null 时，才创建新对话**
+                if (!currentConversationId) {
+                    currentConversationId = `convo-${Date.now()}`;
+                    allConversations.unshift({
+                        id: currentConversationId,
+                        title: title,
+                        messages: conversationHistory
+                    });
+                }
+
+                localStorage.setItem('allConversations', JSON.stringify(allConversations));
+                loadHistoryToSidebar(); // 保存后立即刷新侧边栏
+            };
+
+            // 函数：开始一个新对话
+            const startNewChat = () => {
+                currentConversationId = null;
+                conversationHistory = [];
+                clearChatWindow();
+                historySidebar.classList.remove('open'); // 关闭侧边栏
+            };
+
+            // --- 事件监听器绑定 ---
+            newChatBtn.addEventListener('click', startNewChat);
+
+            historyItemsList.addEventListener('click', (event) => {
+                if (event.target.tagName === 'A') {
+                    const id = event.target.dataset.conversationId;
+                    loadConversation(id);
+                }
+            });
+
+
+            // 函数：向聊天窗口添加消息
+            const addMessageToChat = (sender, content) => {
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('chat-message');
+
+                if (sender === 'user') {
+                    messageDiv.classList.add('user-message');
+                    messageDiv.textContent = content; // 用户消息直接显示纯文本
+                } else if (sender === 'assistant') {
+                    messageDiv.classList.add('ai-message');
+                    // **核心修改：使用 marked.parse() 将Markdown转为HTML**
+                    messageDiv.innerHTML = marked.parse(content);
+                } else if (sender === 'error') {
+                    messageDiv.classList.add('error-message');
+                    messageDiv.textContent = content;
+                } else if (sender === 'typing') {
+                    messageDiv.classList.add('ai-message', 'typing-indicator');
+                    messageDiv.innerHTML = '<span></span><span></span><span></span>';
+                }
+
+                chatHistoryContainer.appendChild(messageDiv);
+                chatHistoryContainer.scrollTop = chatHistoryContainer.scrollHeight;
+                return messageDiv;
+            };
+
+            // 函数：调用AI API获取回复
+            // MODIFIED: This function also intelligently constructs the URL
+            const getAiReply = async (messages) => {
+                const baseUrl = localStorage.getItem('apiUrl'); // 现在获取的是基础URL
+                const apiKey = localStorage.getItem('apiKey');
+                const modelId = localStorage.getItem('selectedModelId');
+
+                if (!baseUrl || !apiKey || !modelId) {
+                    throw new Error('API URL, Key, 或模型未在设置中配置。');
+                }
+
+                // 步骤1: 清理基础URL
+                let cleanedUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+
+                // 步骤2: 拼接上专门用于聊天的路径
+                const chatUrl = `${cleanedUrl}/v1/chat/completions`;
+
+                // (用于调试)
+                console.log(`正在向这里发送聊天请求: ${chatUrl}`);
+
+                const userSystemPrompt = localStorage.getItem('systemPrompt') || '';
+                const combinedSystemPrompt = `${CORE_SYSTEM_PROMPT}\n\n${userSystemPrompt}`;
+
+                const messagesPayload = [
+                    { role: 'system', content: combinedSystemPrompt },
+                    ...messages
+                ];
+
+                const response = await fetch(chatUrl, { // 使用我们新拼接好的 chatUrl
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: modelId,
+                        messages: messagesPayload
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(`API 请求失败: ${response.status} - ${errorData}`);
+                }
+
+                const data = await response.json();
+                const reply = data.choices[0]?.message?.content;
+
+                if (!reply) {
+                    throw new Error('无法从API响应中解析出有效的回复内容。');
+                }
+
+                return reply;
+            };
+
+            // 函数：处理发送消息的整个流程
+            const handleSendMessage = async () => {
+                const userText = mainInput.value.trim();
+                if (!userText) return;
+
+                if (!welcomeScreen.classList.contains('hidden')) {
+                    welcomeScreen.classList.add('hidden');
+                }
+
+                // **核心修改：在把用户消息存入历史记录前，检查是否需要创建新对话**
+                if (conversationHistory.length === 0) {
+                    // 如果当前历史为空，意味着这是一个新对话的开始
+                    currentConversationId = null; // 明确地重置ID，确保saveConversation会创建新记录
+                }
+
+                addMessageToChat('user', userText);
+                conversationHistory.push({ role: 'user', content: userText });
+                mainInput.value = '';
+
+                const typingIndicator = addMessageToChat('typing');
+
+                try {
+                    const aiText = await getAiReply(conversationHistory);
+                    conversationHistory.push({ role: 'assistant', content: aiText });
+                    typingIndicator.remove();
+                    addMessageToChat('assistant', aiText); // 注意：addMessageToChat也需要修改
+
+                    saveConversation(); // 保存对话
+
+                } catch (error) {
+                    console.error('获取AI回复时出错:', error);
+                    typingIndicator.remove();
+                    addMessageToChat('error', `出错了: ${error.message}`);
+                }
+            };
+
+            sendButton.addEventListener('click', handleSendMessage);
+            mainInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault(); // 阻止默认的回车换行
+                    handleSendMessage();
+                }
+            });
+
+            // --- 历史记录侧边栏逻辑 ---
+            historyListBtn.addEventListener('click', () => historySidebar.classList.add('open'));
+            closeSidebarBtn.addEventListener('click', () => historySidebar.classList.remove('open'));
+
+
+            // --- Modal & Form Logic (no changes here) ---
+            const openModal = () => {
+                apiUrlInput.value = localStorage.getItem('apiUrl') || '';
+                apiKeyInput.value = localStorage.getItem('apiKey') || '';
+                settingsModal.style.display = 'flex';
+            };
+            const closeModal = () => {
+                settingsModal.style.display = 'none';
+            };
+            settingsBtn.addEventListener('click', openModal);
+            closeModalBtn.addEventListener('click', closeModal);
+            cancelBtn.addEventListener('click', closeModal);
+            settingsModal.addEventListener('click', (event) => {
+                if (event.target === settingsModal) closeModal();
+            });
+            apiForm.addEventListener('submit', (event) => {
+                event.preventDefault();
+                localStorage.setItem('apiUrl', apiUrlInput.value);
+                localStorage.setItem('apiKey', apiKeyInput.value);
+                alert('设置已保存');
+                closeModal();
+            });
+
+            // --- Dynamic Model Logic (MAJOR UPDATES HERE) ---
+
+            // NEW: The "Smart Scout" function to find the model array
+            const findModelsInApiResponse = (data) => {
+                console.log('服务器返回的原始数据:', data); // Keep this for debugging
+
+                // Case 1: The response itself is an array of models
+                if (Array.isArray(data)) {
+                    return data;
+                }
+
+                // Case 2: The array is under the key "models"
+                if (data && Array.isArray(data.models)) {
+                    return data.models;
+                }
+
+                // Case 3: The array is under the key "data" (very common)
+                if (data && Array.isArray(data.data)) {
+                    return data.data;
+                }
+
+                // Case 4: The array is under the key "choices" (used by some APIs)
+                if (data && Array.isArray(data.choices)) {
+                    return data.choices;
+                }
+
+                // If none of the common patterns are found, return null
+                return null;
+            };
+
+            const updateModelDropdown = (models) => {
+                modelDropdown.innerHTML = '';
+                // Check if models is a valid array with items
+                if (models && models.length > 0) {
+                    models.forEach(model => {
+                        const modelLink = document.createElement('a');
+                        modelLink.href = '#';
+                        // Adapt to different possible object structures (e.g., model.id vs model.name)
+                        modelLink.textContent = model.name || model.id; // Use name, fallback to id
+                        modelLink.dataset.modelId = model.id;
+                        modelDropdown.appendChild(modelLink);
+                    });
+                } else {
+                    const errorItem = document.createElement('div');
+                    errorItem.textContent = '未找到模型';
+                    errorItem.style.padding = '10px 20px';
+                    errorItem.style.color = 'grey';
+                    modelDropdown.appendChild(errorItem);
+                }
+            };
+
+            // MODIFIED: This function now uses the smart scout
+            // MODIFIED: This function now intelligently constructs the URL
+            const performModelFetch = async (baseUrl, key) => {
+                if (!baseUrl) {
+                    throw new Error('API URL is not configured.');
+                }
+
+                // 步骤1: 清理用户输入的URL，移除末尾可能存在的斜杠 "/"
+                let cleanedUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+
+                // 步骤2: 拼接上专门用于获取模型列表的路径 (endpoint)
+                const modelsUrl = `${cleanedUrl}/v1/models`;
+
+                // (用于调试) 在控制台打印出最终请求的地址，方便排查问题
+                console.log(`正在尝试从这里获取模型列表: ${modelsUrl}`);
+
+                const response = await fetch(modelsUrl, { // 使用我们新拼接好的 modelsUrl
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${key}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+                }
+                const data = await response.json();
+                const models = findModelsInApiResponse(data);
+                if (models === null) {
+                    throw new Error('无法在API响应中自动找到模型列表。');
+                }
+                return models;
+            };
+
+            // The rest of the code remains largely the same...
+
+            const handleTestConnection = async () => {
+                const testUrl = apiUrlInput.value;
+                const testKey = apiKeyInput.value;
+                testConnectionBtn.textContent = '测试中...';
+                testConnectionBtn.disabled = true;
+
+                try {
+                    const models = await performModelFetch(testUrl, testKey);
+                    updateModelDropdown(models);
+                    alert('连接成功！模型已加载。');
+                } catch (error) {
+                    console.error('API Connection Test Failed:', error);
+                    alert(`连接失败：${error.message}`);
+                    updateModelDropdown([]);
+                } finally {
+                    testConnectionBtn.textContent = '测试完成';
+                    testConnectionBtn.disabled = false;
+                }
+            };
+
+            testConnectionBtn.addEventListener('click', handleTestConnection);
+
+            const displayModelDropdown = async () => {
+                modelDropdown.innerHTML = '<div>加载中...</div>';
+                modelDropdown.querySelector('div').style.padding = '10px 20px';
+
+                const rect = modelSelector.getBoundingClientRect();
+                modelDropdown.style.left = `${rect.left}px`;
+                modelDropdown.style.bottom = `${window.innerHeight - rect.top}px`;
+                modelDropdown.style.display = 'block';
+
+                try {
+                    const savedUrl = localStorage.getItem('apiUrl');
+                    const savedKey = localStorage.getItem('apiKey');
+                    const models = await performModelFetch(savedUrl, savedKey);
+                    updateModelDropdown(models);
+                } catch (error) {
+                    console.error('Failed to fetch models:', error);
+                    updateModelDropdown([]);
+                }
+            };
+
+            modelSelector.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const isVisible = modelDropdown.style.display === 'block';
+                if (!isVisible) {
+                    displayModelDropdown();
+                } else {
+                    modelDropdown.style.display = 'none';
+                }
+            });
+
+            modelDropdown.addEventListener('click', (event) => {
+                event.preventDefault();
+                if (event.target.tagName === 'A') {
+                    const selectedModelName = event.target.textContent;
+                    const selectedModelId = event.target.dataset.modelId;
+                    selectedModelSpan.textContent = selectedModelName;
+                    localStorage.setItem('selectedModelId', selectedModelId);
+                    localStorage.setItem('selectedModelName', selectedModelName);
+                    modelDropdown.style.display = 'none';
+                }
+            });
+
+            document.addEventListener('click', () => {
+                modelDropdown.style.display = 'none';
+            });
+
+            const savedModelName = localStorage.getItem('selectedModelName');
+            if (savedModelName) {
+                selectedModelSpan.textContent = savedModelName;
+            } else {
+                selectedModelSpan.textContent = '选择模型';
+            }
+
+            // --- 历史记录侧边栏逻辑 ---
+            historyListBtn.addEventListener('click', () => {
+                historySidebar.classList.add('open');
+            });
+
+            closeSidebarBtn.addEventListener('click', () => {
+                historySidebar.classList.remove('open');
+            });
+
+        });
+    </script>
+
+</body>
+
+
+</html>
